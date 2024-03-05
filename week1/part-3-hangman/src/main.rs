@@ -16,7 +16,7 @@ extern crate rand;
 use rand::Rng;
 use std::fs;
 use std::io;
-//use std::io::Write;
+use std::io::Write;
 
 const NUM_INCORRECT_GUESSES: u32 = 5;
 const WORDS_PATH: &str = "words.txt";
@@ -47,7 +47,11 @@ fn main() {
         println!("The word so far is {}", guess_string);
         println!("You have guessed the following letters: {}", guessed_char);
         println!("You have {} guesses left", chances);
-        println!("Please guess a letter: ");
+        print!("Please guess a letter: ");
+
+        io::stdout()
+            .flush()
+            .expect("Error flushing stdout.");
 
         let mut guess_letter = String::new();
 
