@@ -16,7 +16,7 @@ extern crate rand;
 use rand::Rng;
 use std::fs;
 use std::io;
-use std::io::Write;
+//use std::io::Write;
 
 const NUM_INCORRECT_GUESSES: u32 = 5;
 const WORDS_PATH: &str = "words.txt";
@@ -32,9 +32,61 @@ fn main() {
     // Note: given what you know about Rust so far, it's easier to pull characters out of a
     // vector than it is to pull them out of a string. You can get the ith character of
     // secret_word by doing secret_word_chars[i].
-    let secret_word_chars: Vec<char> = secret_word.chars().collect();
+    let mut secret_word_chars: Vec<char> = secret_word.chars().collect();
     // Uncomment for debugging:
-    // println!("random word: {}", secret_word);
+    println!("random word: {}", secret_word);
 
     // Your code here! :)
+    let mut guess_word: Vec<char> = vec!['_'; secret_word.len()];
+    let mut guessed_char = String::new();
+    let mut chances: u32 = NUM_INCORRECT_GUESSES;
+    let mut correct = 0;
+
+    loop {
+        let guess_string: String = guess_word.clone().into_iter().collect();
+        println!("The word so far is {}", guess_string);
+        println!("You have guessed the following letters: {}", guessed_char);
+        println!("You have {} guesses left", chances);
+        println!("Please guess a letter: ");
+
+        let mut guess_letter = String::new();
+
+        io::stdin()
+            .read_line(&mut guess_letter)
+            .expect("Read fail!");
+
+        
+        guess_letter.truncate(1);
+
+        let gchar = guess_letter.chars().next().expect("Out of Bound!");
+        let mut flag = false;
+        guessed_char.push(gchar);
+
+        for index in 0..secret_word_chars.len() {
+            if secret_word_chars[index] == gchar {
+                println!("Good guess!");
+                guess_word[index] = gchar;
+                secret_word_chars[index] = '_';
+                correct += 1;
+                flag = true;
+                break;
+            }
+        }
+
+        if flag == false {
+            println!("Error guess!");
+            chances -= 1;
+        }
+
+        if chances == 0 {
+            println!("Game over!");
+            break;
+        }
+
+        if correct == secret_word.len() {
+            println!("You win!");
+            break;
+        }
+    }
+
 }
