@@ -1,4 +1,4 @@
-Example 1:
+Example 1: No
 ```
 fn main() {
     let mut s = String::from("hello");
@@ -12,7 +12,7 @@ fn main() {
 
 
 
-Example 2:
+Example 2: No
 ```
 fn drip_drop() -> &String {
     let s = String::from("hello world!");
@@ -22,7 +22,7 @@ fn drip_drop() -> &String {
 
 
 
-Example 3:
+Example 3: No
 ```
 fn main() {
     let s1 = String::from("hello");
