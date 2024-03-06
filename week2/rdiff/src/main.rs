@@ -30,21 +30,21 @@ fn lcs(seq1: &Vec<String>, seq2: &Vec<String>) -> Grid {
     let mut g = Grid::new(m + 1, n + 1);
 
     for i in 0..m + 1 {
-        g.set(i, 0, 0);
+        g.set(i, 0, 0).expect("Set fail!");
     }   
     for j in 0..n + 1 {
-        g.set(0, j, 0);
+        g.set(0, j, 0).expect("Set fail!");
     }
     for i in 0..m {
         for j in 0..n {
             if seq1[i] == seq2[j] {
-                g.set(i + 1, j + 1, g.get(i, j).unwrap() + 1);
+                g.set(i + 1, j + 1, g.get(i, j).unwrap() + 1).expect("Set fail!");
             } else {
                 let mut k = g.get(i + 1, j).unwrap();
                 if k < g.get(i, j + 1).unwrap() {
                     k = g.get(i, j + 1).unwrap();
                 }
-                g.set(i + 1, j + 1, k);
+                g.set(i + 1, j + 1, k).expect("Set fail!");
             }
         }
     }
@@ -52,13 +52,21 @@ fn lcs(seq1: &Vec<String>, seq2: &Vec<String>) -> Grid {
     g
 }
 
-#[allow(unused)] // TODO: delete this line when you implement this function
 fn print_diff(lcs_table: &Grid, lines1: &Vec<String>, lines2: &Vec<String>, i: usize, j: usize) {
-    unimplemented!();
-    // Be sure to delete the #[allow(unused)] line above
+    if i > 0 && j > 0 && lines1[i - 1] == lines2[j - 1] {
+        print_diff(lcs_table, lines1, lines2, i - 1, j - 1);
+        println!("  {}", lines1[i - 1]);
+    } else if j > 0 && (i == 0 || lcs_table.get(i, j - 1).unwrap() >= lcs_table.get(i - 1, j).unwrap()) {
+        print_diff(lcs_table, lines1, lines2, i, j - 1);
+        println!("> {}", lines2[j - 1]);
+    } else if i > 0 && (j == 0 || lcs_table.get(i, j - 1).unwrap() < lcs_table.get(i - 1, j).unwrap()) {
+        print_diff(lcs_table, lines1, lines2, i - 1, j);
+        println!("< {}", lines1[i - 1]);
+    } else {
+        println!("");
+    }
 }
 
-#[allow(unused)] // TODO: delete this line when you implement this function
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
@@ -68,8 +76,12 @@ fn main() {
     let filename1 = &args[1];
     let filename2 = &args[2];
 
-    unimplemented!();
-    // Be sure to delete the #[allow(unused)] line above
+    let line1 = read_file_lines(filename1).expect("Fail to open file1");
+    let line2 = read_file_lines(filename2).expect("Fail to open file2");
+
+    let g = lcs(&line1, &line2);
+
+    print_diff(&g, &line1, &line2, line1.len(), line2.len());
 }
 
 #[cfg(test)]
