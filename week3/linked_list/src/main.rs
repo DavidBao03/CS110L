@@ -19,4 +19,17 @@ fn main() {
     //for val in &list {
     //    println!("{}", val);
     //}
+
+    let mut list_string: LinkedList<String> = LinkedList::new();
+    assert!(list_string.is_empty());
+    assert_eq!(list_string.get_size(), 0);
+    for i in 1..12 {
+        list_string.push_front(format!("Here's string {}\n", i));
+    }
+
+    println!("{}", list_string);
+    println!("list size: {}", list_string.get_size());
+    println!("top element: {}", list_string.pop_front().unwrap());
+    println!("{}", list_string);
+    println!("size: {}", list_string.get_size());
 }
