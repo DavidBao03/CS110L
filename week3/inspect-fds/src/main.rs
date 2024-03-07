@@ -22,6 +22,11 @@ fn main() {
     };
 
     process.print();
+
+    let child = ps_utils::get_child_processes(process.pid).expect("No Child process");
+    for proc in child {
+        proc.print();
+    }
 }
 
 #[cfg(test)]
