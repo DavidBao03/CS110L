@@ -1,5 +1,4 @@
 use crate::open_file::OpenFile;
-#[allow(unused)] // TODO: delete this line for Milestone 3
 use std::fs;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -10,7 +9,6 @@ pub struct Process {
 }
 
 impl Process {
-    //#[allow(unused)] // TODO: delete this line for Milestone 1
     pub fn new(pid: usize, ppid: usize, command: String) -> Process {
         Process { pid, ppid, command }
     }
@@ -20,10 +18,21 @@ impl Process {
     /// information will commonly be unavailable if the process has exited. (Zombie processes
     /// still have a pid, but their resources have already been freed, including the file
     /// descriptor table.)
-    #[allow(unused)] // TODO: delete this line for Milestone 3
     pub fn list_fds(&self) -> Option<Vec<usize>> {
-        // TODO: implement for Milestone 3
-        unimplemented!();
+        let mut v = Vec::new();
+        let fname = format!("/proc/{}/fd", self.pid);
+        for entry in fs::read_dir(fname).ok()? {
+            let entry = entry.ok()?;
+            v.push(
+                entry
+                    .file_name()
+                    .into_string()
+                    .unwrap()
+                    .parse::<usize>()
+                    .expect("Invalid Num"),
+            );
+        }
+        Some(v)
     }
 
     /// This function returns a list of (fdnumber, OpenFile) tuples, if file descriptor
@@ -43,6 +52,7 @@ impl Process {
             "====== {} (pid {}, ppid {}) ======",
             self.command, self.pid, self.ppid
         );
+        self.list_fds();
     }
 }
 
@@ -65,7 +75,7 @@ mod test {
             process
                 .list_fds()
                 .expect("Expected list_fds to find file descriptors, but it returned None"),
-            vec![0, 1, 2, 4, 5]
+            vec![0, 1, 2, 4, 5, 64]
         );
         let _ = test_subprocess.kill();
     }
