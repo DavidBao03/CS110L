@@ -1,4 +1,6 @@
 use linked_list::LinkedList;
+
+use crate::linked_list::ComputeNorm;
 pub mod linked_list;
 
 fn main() {
@@ -44,7 +46,22 @@ fn main() {
     println!("After pop: {}", list_clone == list_string);
 
     println!("======Test for Iter======");
-    for val in list_clone {
+    for val in &list_clone {
         println!("{}", val);
     }
+
+    println!("{}", list_clone);
+
+    // for val in list_clone {
+    //     println!("{}", val);
+    // }
+
+    // println!("{}", list_clone);
+
+    let mut list_f64 = LinkedList::new();
+    list_f64.push_front(3.0);
+    list_f64.push_front(4.0);
+
+    println!("Nore of the list: {}", list_f64.compute_nore());
+    println!("{}", list_f64);
 }
