@@ -42,4 +42,9 @@ fn main() {
     );
     list_clone.pop_front();
     println!("After pop: {}", list_clone == list_string);
+
+    println!("======Test for Iter======");
+    for val in list_clone {
+        println!("{}", val);
+    }
 }
