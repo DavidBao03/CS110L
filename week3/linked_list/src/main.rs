@@ -33,6 +33,13 @@ fn main() {
     println!("{}", list_string);
     println!("size: {}", list_string.get_size());
 
-    let list_clone = list_string.clone();
+    let mut list_clone = list_string.clone();
     println!("cloned list: {}", list_clone);
+
+    println!(
+        "cloned list is equal to origin list: {}",
+        list_clone == list_string
+    );
+    list_clone.pop_front();
+    println!("After pop: {}", list_clone == list_string);
 }
