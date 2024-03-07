@@ -32,4 +32,7 @@ fn main() {
     println!("top element: {}", list_string.pop_front().unwrap());
     println!("{}", list_string);
     println!("size: {}", list_string.get_size());
+
+    let list_clone = list_string.clone();
+    println!("cloned list: {}", list_clone);
 }
