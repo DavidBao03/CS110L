@@ -44,10 +44,20 @@ impl Debugger {
                     }
                 }
                 DebuggerCommand::Quit => {
+                    let child = self.inferior.as_mut().unwrap();
+                    println!("Killing running inferior (pid {})", child.pid());
+                    child.kill();
                     return;
                 }
                 DebuggerCommand::Cont => {
-                    let _ = self.inferior.as_mut().unwrap().continue_run();
+                    let cont_inferior = match self.inferior.as_mut() {
+                        None => {
+                            println!("No subprocess is running");
+                            return;
+                        },
+                        Some(cont_inferior) => cont_inferior,
+                    };
+                    let _ = cont_inferior.continue_run();
                 }
             }
         }

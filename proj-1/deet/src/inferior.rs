@@ -78,4 +78,8 @@ impl Inferior {
             other => panic!("waitpid returned unexpected status: {:?}", other),
         })
     }
+
+    pub fn kill(&mut self) {
+        let _ = self.child.kill();
+    }
 }
