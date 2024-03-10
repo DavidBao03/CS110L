@@ -119,7 +119,8 @@ impl Debugger {
                     self.inferior.as_ref().unwrap().print_backtrace(&self.debug_data).expect("Back trace fail!");
                 }
                 DebuggerCommand::Break(args) => {
-                    for addr in args {
+                    for string in args {
+                        let addr = self.parse_address(&string).unwrap();
                         if self.inferior.is_some() {
                             if let Ok(inst) = self.inferior.as_mut().unwrap().write_byte(addr, 0xcc) {
                                 println!("Set break point {} at {:#x}", self.break_list.len(), addr);
@@ -133,6 +134,23 @@ impl Debugger {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    fn parse_address(&self, addr: &str) -> Option<usize> {
+        if addr.starts_with('*') {
+            let addr_without_0x = if addr[1..].to_lowercase().starts_with("0x") {
+                &addr[3..]
+            } else {
+                &addr[1..]
+            };
+            // println!("{} {}", addr, addr_without_0x);
+            usize::from_str_radix(addr_without_0x, 16).ok()
+        } else {
+            match addr.to_string().parse() {
+                Ok(val) => self.debug_data.get_addr_for_line(None, val),
+                Err(_)  => self.debug_data.get_addr_for_function(None, addr),
             }
         }
     }
