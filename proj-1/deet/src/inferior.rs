@@ -3,7 +3,9 @@ use nix::sys::ptrace;
 use nix::sys::signal;
 use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
 use nix::unistd::Pid;
+use std::collections::HashMap;
 use std::convert::TryInto;
+use std::hash::Hash;
 use std::process::Command;
 use std::os::unix::process::CommandExt;
 use std::process::Child;
@@ -45,7 +47,7 @@ pub struct Inferior {
 impl Inferior {
     /// Attempts to start a new inferior process. Returns Some(Inferior) if successful, or None if
     /// an error is encountered.
-    pub fn new(target: &str, args: &Vec<String>, break_list: &Vec<usize>) -> Option<Inferior> {
+    pub fn new(target: &str, args: &Vec<String>, break_list: &mut HashMap<usize, u8>) -> Option<Inferior> {
         // println!("{:?}, {:?}", target, args);
         let mut cmd = Command::new(target);
         cmd.args(args);
@@ -55,17 +57,37 @@ impl Inferior {
 
         let child = cmd.spawn().ok()?;
         let mut inferior = Inferior { child: child };
-
-        for addr in break_list {
-            inferior.write_byte(*addr, 0xcc).ok();
+        let bps = break_list.clone();
+        for (addr, _) in bps {
+            match inferior.write_byte(addr, 0xcc) {
+                Ok(inst) => {
+                    break_list.insert(addr, inst);
+                },
+                Err(_) => println!("Invalid breakpoint {:#x}", addr),
+            }
         }
 
         Some(inferior)
     }
 
-    pub fn continue_run(&mut self, break_list: &Vec<usize>) -> Result<Status, nix::Error> {
-        for addr in break_list {
-            self.write_byte(*addr, 0xcc).ok();
+    pub fn continue_run(&mut self, break_list: &HashMap<usize, u8>) -> Result<Status, nix::Error> {
+        let mut regs = ptrace::getregs(self.pid())?;
+        let rip = regs.rip as usize;
+
+        if let Some(orig_inst) = break_list.get(&(rip - 1)) {
+            println!("Stopped at a breakpoint");
+            self.write_byte(rip - 1, *orig_inst).unwrap();
+            regs.rip = (rip - 1) as u64;
+            ptrace::setregs(self.pid(), regs).unwrap();
+            ptrace::step(self.pid(), None).unwrap();
+
+            match self.wait(None).unwrap() {
+                Status::Exited(exit_code) => return Ok(Status::Exited(exit_code)),
+                Status::Signaled(signal)  => return Ok(Status::Signaled(signal)),
+                Status::Stopped(_, _) => {
+                    self.write_byte(rip - 1, 0xcc).unwrap();
+                } 
+            }
         }
 
         ptrace::cont(self.pid(), None)?;
@@ -113,7 +135,7 @@ impl Inferior {
         Ok(())
     }
 
-    fn write_byte(&mut self, addr: usize, val: u8) -> Result<u8, nix::Error> {
+    pub fn write_byte(&mut self, addr: usize, val: u8) -> Result<u8, nix::Error> {
         let aligned_addr = align_addr_to_word(addr);
         let byte_offset = addr - aligned_addr;
         let word = ptrace::read(self.pid(), aligned_addr as ptrace::AddressType)? as u64;

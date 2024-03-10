@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use crate::debugger_command::DebuggerCommand;
 use crate::inferior::Inferior;
 use rustyline::error::ReadlineError;
@@ -11,7 +12,7 @@ pub struct Debugger {
     readline: Editor<()>,
     inferior: Option<Inferior>,
     debug_data: DwarfData,
-    break_list: Vec<usize>,
+    break_list: HashMap<usize, u8>,
 }
 
 impl Debugger {
@@ -30,12 +31,12 @@ impl Debugger {
             }
         };
 
+        debug_data.print();
+
         let history_path = format!("{}/.deet_history", std::env::var("HOME").unwrap());
         let mut readline = Editor::<()>::new();
         // Attempt to load history from ~/.deet_history if it exists
         let _ = readline.load_history(&history_path);
-
-        debug_data.print();
 
         Debugger {
             target: target.to_string(),
@@ -43,7 +44,7 @@ impl Debugger {
             readline,
             inferior: None,
             debug_data: debug_data,
-            break_list: Vec::new(),
+            break_list: HashMap::new(),
         }
     }
 
@@ -58,7 +59,7 @@ impl Debugger {
                         child.kill();
                         self.inferior = None;
                     }
-                    if let Some(inferior) = Inferior::new(&self.target, &args, &self.break_list) {
+                    if let Some(inferior) = Inferior::new(&self.target, &args, &mut self.break_list) {
                         // Create the inferior
                         self.inferior = Some(inferior);
                         
@@ -69,7 +70,7 @@ impl Debugger {
                             Status::Signaled(signal)  => println!("Child exit due to {}", signal),
                             Status::Stopped(signal, rip) => {
                                 match self.debug_data.get_line_from_addr(rip) {
-                                    Some(val) => println!("Child stopped (signal {}) at {}", signal, val),
+                                    Some(val) => println!("Child stopped (signal {}) at {}", signal, val),                   
                                     None      => println!("Child stopped (signal {}) at {:#?}", signal, rip),
                                 } 
                             }
@@ -93,8 +94,14 @@ impl Debugger {
                         continue;
                     }
                     match self.inferior.as_mut().unwrap().continue_run(&self.break_list).ok().unwrap() {
-                            Status::Exited(exit_code) => println!("Child exit (status {})", exit_code),
-                            Status::Signaled(signal)  => println!("Child exit due to {}", signal),
+                            Status::Exited(exit_code) => {
+                                println!("Child exit (status {})", exit_code);
+                                self.inferior = None;
+                            }
+                            Status::Signaled(signal)  => {
+                                println!("Child exit due to {}", signal);
+                                self.inferior = None;
+                            }
                             Status::Stopped(signal, rip) => {
                                 match self.debug_data.get_line_from_addr(rip) {
                                     Some(val) => println!("Child stopped (signal {}) at {}", signal, val),
@@ -112,8 +119,17 @@ impl Debugger {
                 }
                 DebuggerCommand::Break(args) => {
                     for addr in args {
-                        println!("Set break point {} at {:#x}", self.break_list.len(), addr);
-                        self.break_list.push(addr);
+                        if self.inferior.is_some() {
+                            if let Ok(inst) = self.inferior.as_mut().unwrap().write_byte(addr, 0xcc) {
+                                println!("Set break point {} at {:#x}", self.break_list.len(), addr);
+                                self.break_list.insert(addr, inst);
+                            } else {
+                                println!("Invalid breakpoint at {:#x}", addr);
+                            }
+                        } else {
+                            println!("Set break point {} at {:#x}", self.break_list.len(), addr);
+                            self.break_list.insert(addr, 0);
+                        }
                     }
                 }
             }
