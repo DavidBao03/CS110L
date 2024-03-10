@@ -63,7 +63,9 @@ impl Debugger {
                         match self.inferior.as_mut().unwrap().continue_run().ok().unwrap() {
                             Status::Exited(exit_code) => println!("Child exit (status {})", exit_code),
                             Status::Signaled(signal)  => println!("Child exit due to {}", signal),
-                            Status::Stopped(signal, rip) => println!("Child stopped by signal {} at address {:#x}", signal, rip),
+                            Status::Stopped(signal, rip) => {
+                                println!("Child stopped (signal {}) at {}", signal, self.debug_data.get_line_from_addr(rip).unwrap());
+                            }
                         } 
                     } else {
                         println!("Error starting subprocess");
@@ -84,7 +86,9 @@ impl Debugger {
                     match self.inferior.as_mut().unwrap().continue_run().ok().unwrap() {
                             Status::Exited(exit_code) => println!("Child exit (status {})", exit_code),
                             Status::Signaled(signal)  => println!("Child exit due to {}", signal),
-                            Status::Stopped(signal, rip) => println!("Child stopped by signal {} at address {:#x}", signal, rip),
+                            Status::Stopped(signal, rip) => {
+                                println!("Child stopped (signal {}) at {}", signal, self.debug_data.get_line_from_addr(rip).unwrap());
+                            }
                     } 
                 }
                 DebuggerCommand::Back => {
