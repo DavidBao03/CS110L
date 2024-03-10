@@ -3,9 +3,11 @@ use nix::sys::ptrace;
 use nix::sys::signal;
 use nix::sys::wait::{waitpid, WaitPidFlag, WaitStatus};
 use nix::unistd::Pid;
+use std::convert::TryInto;
 use std::process::Command;
 use std::os::unix::process::CommandExt;
 use std::process::Child;
+use crate::dwarf_data::{DwarfData, Error as DwarfError};
 
 use crate::inferior;
 
@@ -77,5 +79,22 @@ impl Inferior {
     pub fn kill(&mut self) {
         self.child.kill().expect("Killing child fail!");
         self.wait(None).expect("Waiting child fail!");
+    }
+
+    pub fn print_backtrace(&self, debug_data: &DwarfData) -> Result<(), nix::Error> {
+        let mut rip = ptrace::getregs(self.pid()).unwrap().rip as usize;
+        let mut rbp = ptrace::getregs(self.pid()).unwrap().rbp as usize;
+        // println!("%rip : {:#x}, %rbp : {:#x}", rip, rbp);
+        loop {
+            let line = debug_data.get_line_from_addr(rip).unwrap();
+            let func = debug_data.get_function_from_addr(rip).unwrap();
+            println!("{} {}", func, line);
+            if &func == "main" {
+                break;
+            }
+            rip = ptrace::read(self.pid(), (rbp + 8) as ptrace::AddressType)? as usize;
+            rbp = ptrace::read(self.pid(), rbp as ptrace::AddressType)? as usize;
+        }
+        Ok(())
     }
 }
