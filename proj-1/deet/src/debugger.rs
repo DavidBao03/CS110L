@@ -5,11 +5,12 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use crate::inferior::Status;
 use crate::dwarf_data::{DwarfData, Error as DwarfError};
+use rustyline::history::FileHistory;
 
 pub struct Debugger {
     target: String,
     history_path: String,
-    readline: Editor<()>,
+    readline: Editor<(), FileHistory>,
     inferior: Option<Inferior>,
     debug_data: DwarfData,
     break_list: HashMap<usize, u8>,
@@ -34,9 +35,9 @@ impl Debugger {
         debug_data.print();
 
         let history_path = format!("{}/.deet_history", std::env::var("HOME").unwrap());
-        let mut readline = Editor::<()>::new();
+        let mut readline = Editor::<(), FileHistory>::new().expect("Create fail");
         // Attempt to load history from ~/.deet_history if it exists
-        let _ = readline.load_history(&history_path);
+        let _ = readline.readline(&history_path);
 
         Debugger {
             target: target.to_string(),
