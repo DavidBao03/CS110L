@@ -47,11 +47,6 @@ impl Inferior {
         }
         let child = cmd.spawn().ok()?;
         let inferior = Inferior { child: child };
-        match inferior.continue_run().ok()? {
-            Status::Exited(exit_code) => println!("Child exit (status {})", exit_code),
-            Status::Signaled(signal)  => println!("Child exit due to {}", signal),
-            Status::Stopped(signal, rip) => println!("Child stopped by signal {} at address {:#x}", signal, rip),
-        } 
         Some(inferior)
     }
 
@@ -80,6 +75,7 @@ impl Inferior {
     }
 
     pub fn kill(&mut self) {
-        let _ = self.child.kill();
+        self.child.kill().expect("Killing child fail!");
+        self.wait(None).expect("Waiting child fail!");
     }
 }

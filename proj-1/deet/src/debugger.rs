@@ -2,6 +2,7 @@ use crate::debugger_command::DebuggerCommand;
 use crate::inferior::Inferior;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
+use crate::inferior::Status;
 
 pub struct Debugger {
     target: String,
@@ -32,13 +33,24 @@ impl Debugger {
         loop {
             match self.get_next_command() {
                 DebuggerCommand::Run(args) => {
+                    if self.inferior.is_some() {
+                        println!("Child is already processing!");
+                        let child = self.inferior.as_mut().unwrap();
+                        println!("Killing running inferior (pid {})", child.pid());
+                        child.kill();
+                        self.inferior = None;
+                    }
                     if let Some(inferior) = Inferior::new(&self.target, &args) {
                         // Create the inferior
                         self.inferior = Some(inferior);
                         
                         // You may use self.inferior.as_mut().unwrap() to get a mutable reference
                         // to the Inferior object
-
+                        match self.inferior.as_mut().unwrap().continue_run().ok().unwrap() {
+                            Status::Exited(exit_code) => println!("Child exit (status {})", exit_code),
+                            Status::Signaled(signal)  => println!("Child exit due to {}", signal),
+                            Status::Stopped(signal, rip) => println!("Child stopped by signal {} at address {:#x}", signal, rip),
+                        } 
                     } else {
                         println!("Error starting subprocess");
                     }
@@ -47,17 +59,19 @@ impl Debugger {
                     let child = self.inferior.as_mut().unwrap();
                     println!("Killing running inferior (pid {})", child.pid());
                     child.kill();
+                    self.inferior = None;
                     return;
                 }
                 DebuggerCommand::Cont => {
-                    let cont_inferior = match self.inferior.as_mut() {
-                        None => {
-                            println!("No subprocess is running");
-                            return;
-                        },
-                        Some(cont_inferior) => cont_inferior,
-                    };
-                    let _ = cont_inferior.continue_run();
+                    if self.inferior.is_none() {
+                        println!("No child is processing!");
+                        continue;
+                    }
+                    match self.inferior.as_mut().unwrap().continue_run().ok().unwrap() {
+                            Status::Exited(exit_code) => println!("Child exit (status {})", exit_code),
+                            Status::Signaled(signal)  => println!("Child exit due to {}", signal),
+                            Status::Stopped(signal, rip) => println!("Child stopped by signal {} at address {:#x}", signal, rip),
+                    } 
                 }
             }
         }
