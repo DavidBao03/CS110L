@@ -11,6 +11,7 @@ pub struct Debugger {
     readline: Editor<()>,
     inferior: Option<Inferior>,
     debug_data: DwarfData,
+    break_list: Vec<usize>,
 }
 
 impl Debugger {
@@ -34,12 +35,15 @@ impl Debugger {
         // Attempt to load history from ~/.deet_history if it exists
         let _ = readline.load_history(&history_path);
 
+        debug_data.print();
+
         Debugger {
             target: target.to_string(),
             history_path,
             readline,
             inferior: None,
             debug_data: debug_data,
+            break_list: Vec::new(),
         }
     }
 
@@ -54,17 +58,20 @@ impl Debugger {
                         child.kill();
                         self.inferior = None;
                     }
-                    if let Some(inferior) = Inferior::new(&self.target, &args) {
+                    if let Some(inferior) = Inferior::new(&self.target, &args, &self.break_list) {
                         // Create the inferior
                         self.inferior = Some(inferior);
                         
                         // You may use self.inferior.as_mut().unwrap() to get a mutable reference
                         // to the Inferior object
-                        match self.inferior.as_mut().unwrap().continue_run().ok().unwrap() {
+                        match self.inferior.as_mut().unwrap().continue_run(&self.break_list).ok().unwrap() {
                             Status::Exited(exit_code) => println!("Child exit (status {})", exit_code),
                             Status::Signaled(signal)  => println!("Child exit due to {}", signal),
                             Status::Stopped(signal, rip) => {
-                                println!("Child stopped (signal {}) at {}", signal, self.debug_data.get_line_from_addr(rip).unwrap());
+                                match self.debug_data.get_line_from_addr(rip) {
+                                    Some(val) => println!("Child stopped (signal {}) at {}", signal, val),
+                                    None      => println!("Child stopped (signal {}) at {:#?}", signal, rip),
+                                } 
                             }
                         } 
                     } else {
@@ -72,10 +79,12 @@ impl Debugger {
                     }
                 }
                 DebuggerCommand::Quit => {
-                    let child = self.inferior.as_mut().unwrap();
-                    println!("Killing running inferior (pid {})", child.pid());
-                    child.kill();
-                    self.inferior = None;
+                    if self.inferior.is_some() {
+                        let child = self.inferior.as_mut().unwrap();
+                        println!("Killing running inferior (pid {})", child.pid());
+                        child.kill();
+                        self.inferior = None;
+                    }
                     return;
                 }
                 DebuggerCommand::Cont => {
@@ -83,11 +92,14 @@ impl Debugger {
                         println!("No child is processing!");
                         continue;
                     }
-                    match self.inferior.as_mut().unwrap().continue_run().ok().unwrap() {
+                    match self.inferior.as_mut().unwrap().continue_run(&self.break_list).ok().unwrap() {
                             Status::Exited(exit_code) => println!("Child exit (status {})", exit_code),
                             Status::Signaled(signal)  => println!("Child exit due to {}", signal),
                             Status::Stopped(signal, rip) => {
-                                println!("Child stopped (signal {}) at {}", signal, self.debug_data.get_line_from_addr(rip).unwrap());
+                                match self.debug_data.get_line_from_addr(rip) {
+                                    Some(val) => println!("Child stopped (signal {}) at {}", signal, val),
+                                    None      => println!("Child stopped (signal {}) at {:#?}", signal, rip),
+                                } 
                             }
                     } 
                 }
@@ -97,6 +109,12 @@ impl Debugger {
                         continue;
                     }
                     self.inferior.as_ref().unwrap().print_backtrace(&self.debug_data).expect("Back trace fail!");
+                }
+                DebuggerCommand::Break(args) => {
+                    for addr in args {
+                        println!("Set break point {} at {:#x}", self.break_list.len(), addr);
+                        self.break_list.push(addr);
+                    }
                 }
             }
         }

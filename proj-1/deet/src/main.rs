@@ -16,7 +16,6 @@ fn main() {
     }
     let target = &args[1];
     // println!("{:?}", args);
-
     // Disable handling of ctrl+c in this process (so that ctrl+c only gets delivered to child
     // processes)
     unsafe { signal(Signal::SIGINT, SigHandler::SigIgn) }.expect("Error disabling SIGINT handling");
