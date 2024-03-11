@@ -24,8 +24,8 @@ struct CmdOptions {
     )]
     active_health_check_interval: usize,
     #[arg(
-    long,
-    default_value = "/"
+        long,
+        default_value = "/"
     )]
     active_health_check_path: String,
     #[arg(

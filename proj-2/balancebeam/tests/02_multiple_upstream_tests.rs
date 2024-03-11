@@ -209,7 +209,7 @@ async fn test_active_health_checks_restore_failed_upstream() {
     upstreams.push(Box::new(EchoServer::new_at_address(failed_ip).await));
 
     log::info!("Waiting a few seconds for the active health check to run...");
-    delay_for(Duration::from_secs(3)).await;
+    sleep(Duration::from_secs(3)).await;
 
     log::info!("Sending some more requests");
     for i in 0..5 {
