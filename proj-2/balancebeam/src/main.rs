@@ -4,6 +4,9 @@ mod response;
 use clap::Parser;
 use rand::{Rng, SeedableRng};
 use tokio::net::{TcpListener, TcpStream};
+use std::io::{Error, ErrorKind};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 /// Contains information parsed from the command-line invocation of balancebeam. The Clap macros
 /// provide a fancy way to automatically construct a command-line argument parser.
@@ -31,6 +34,7 @@ struct CmdOptions {
 /// to, what servers have failed, rate limiting counts, etc.)
 ///
 /// You should add fields to this struct in later milestones.
+#[derive(Clone)]
 struct ProxyState {
     /// How frequently we check whether upstream servers are alive (Milestone 4)
     #[allow(dead_code)]
@@ -43,6 +47,8 @@ struct ProxyState {
     max_requests_per_minute: usize,
     /// Addresses of servers that we are proxying to
     upstream_addresses: Vec<String>,
+
+    alive_upstream_addresses: Arc<RwLock<Vec<String>>>,
 }
 
 #[tokio::main]
@@ -74,6 +80,7 @@ async fn main() {
 
     // Handle incoming connections
     let state = ProxyState {
+        alive_upstream_addresses: Arc::new(RwLock::new(options.upstream.clone())),
         upstream_addresses: options.upstream,
         active_health_check_interval: options.active_health_check_interval,
         active_health_check_path: options.active_health_check_path,
@@ -82,27 +89,40 @@ async fn main() {
 
     loop {
         if let Ok((stream, _)) = listener.accept().await {
-            // 为每一条连接都生成一个新的任务，
-            // stream所有权将被移动到新的任务中，并在那里进行处理
-            // TODO: share ProxyState
-            // tokio::spawn(async move {
-            //     handle_connection(stream, state);
-            // });
-
-            handle_connection(stream, &state).await;
+            let state = state.clone();
+            tokio::spawn(async move {
+                handle_connection(stream, &state).await;
+            });
         }
     }
 }
 
 async fn connect_to_upstream(state: &ProxyState) -> Result<TcpStream, std::io::Error> {
     let mut rng = rand::rngs::StdRng::from_entropy();
-    let upstream_idx = rng.gen_range(0..state.upstream_addresses.len());
-    let upstream_ip = &state.upstream_addresses[upstream_idx];
-    TcpStream::connect(upstream_ip).await.or_else(|err| {
-        log::error!("Failed to connect to upstream {}: {}", upstream_ip, err);
-        Err(err)
-    })
-    // TODO: implement failover (milestone 3)
+    // implement failover (milestone 3)
+    loop {
+        let upstream_addresses = state.alive_upstream_addresses.read().await;
+        let upstream_idx = rng.gen_range(0..upstream_addresses.len());
+        // let upstream_ip = upstream_addresses.get(upstream_idx).unwrap();
+        let upstream_ip = &upstream_addresses.get(upstream_idx).unwrap().clone();
+        drop(upstream_addresses); // release read lock
+
+        match TcpStream::connect(upstream_ip).await {
+            Ok(stream) => return Ok(stream),
+            Err(err) => {
+                log::error!("Failed to connect to upstream {}: {}", upstream_ip, err);
+                // handle dead upstream_addresses
+                let mut upstream_addresses = state.alive_upstream_addresses.write().await;
+                upstream_addresses.swap_remove(upstream_idx); // remove the dead upstream server
+
+                // All upstreams are dead, return Err
+                if upstream_addresses.len() == 0 {
+                    return Err(Error::new(ErrorKind::Other, "All upstreams are dead"));
+                }
+                continue;
+            }
+        }
+    }
 }
 
 async fn send_response(client_conn: &mut TcpStream, response: &http::Response<Vec<u8>>) {
