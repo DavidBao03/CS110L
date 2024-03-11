@@ -6,9 +6,10 @@ use rand::{Rng, SeedableRng};
 use tokio::net::{TcpListener, TcpStream};
 use std::io::{Error, ErrorKind};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Mutex};
 use std::time::Duration;
 use tokio::time::sleep;
+use std::collections::HashMap;
 
 /// Contains information parsed from the command-line invocation of balancebeam. The Clap macros
 /// provide a fancy way to automatically construct a command-line argument parser.
@@ -51,6 +52,8 @@ struct ProxyState {
     upstream_addresses: Vec<String>,
 
     live_upstream_addresses: Arc<RwLock<Vec<String>>>,
+
+    rate_limiting_counter: Arc<Mutex<HashMap<String, usize>>>,
 }
 
 #[tokio::main]
@@ -87,12 +90,18 @@ async fn main() {
         active_health_check_interval: options.active_health_check_interval,
         active_health_check_path: options.active_health_check_path,
         max_requests_per_minute: options.max_requests_per_minute,
+        rate_limiting_counter: Arc::new(Mutex::new(HashMap::new())),
     };
 
     // Start active health check
-    let state_tmp = state.clone();
+    let state_1 = state.clone();
     tokio::spawn(async move {
-        active_health_check(&state_tmp).await;
+        active_health_check(&state_1).await;
+    });
+
+    let state_2 = state.clone();
+    tokio::spawn(async move {
+        rate_limiting_counter_clearer(&state_2).await;
     });
 
     loop {
@@ -102,6 +111,15 @@ async fn main() {
                 handle_connection(stream, &state).await;
             });
         }
+    }
+}
+
+async fn rate_limiting_counter_clearer(state: &ProxyState) {
+    loop {
+        sleep(Duration::from_secs(60)).await;
+        // Clean up counter every minute
+        let mut rate_limiting_counter = state.rate_limiting_counter.clone().lock_owned().await;
+        rate_limiting_counter.clear();
     }
 }
 
@@ -162,6 +180,8 @@ async fn active_health_check(state: &ProxyState) {
                 }
             }
         }
+
+        
     }
 }
 
@@ -255,6 +275,21 @@ async fn handle_connection(mut client_conn: TcpStream, state: &ProxyState) {
             upstream_ip,
             request::format_request_line(&request)
         );
+
+        if state.max_requests_per_minute > 0 {
+            let mut rate_limiting_counter = state.rate_limiting_counter.clone().lock_owned().await;
+            let cnt = rate_limiting_counter.entry(client_ip.clone()).or_insert(0);
+            *cnt += 1;
+
+            if *cnt > state.max_requests_per_minute {
+                let response = response::make_http_error(http::StatusCode::TOO_MANY_REQUESTS);
+                if let Err(error) = response::write_to_stream(&response, &mut client_conn).await {
+                    log::warn!("Failed to send response to client: {}", error);
+                    return;
+                }
+                continue;
+            }
+        }
 
         // Add X-Forwarded-For header so that the upstream server knows the client's IP address.
         // (We're the ones connecting directly to the upstream server, so without this header, the
